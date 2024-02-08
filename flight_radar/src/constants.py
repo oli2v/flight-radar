@@ -17,4 +17,4 @@ KEY_TO_KEEP_LIST = [
     "time_scheduled_departure",
 ]
 
-GCS_BUCKET_NAME = "flight-radar-bucket"
+NUM_FLIGHTS_TO_EXTRACT = 50

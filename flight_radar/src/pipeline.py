@@ -1,13 +1,16 @@
 import json
+import time
+from random import randrange
 from datetime import datetime
 from requests.exceptions import HTTPError
 from tqdm import tqdm
 
 from FlightRadar24 import FlightRadar24API
+from FlightRadar24.errors import CloudflareError
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col
 
-from .constants import KEY_TO_KEEP_LIST
+from .constants import KEY_TO_KEEP_LIST, NUM_FLIGHTS_TO_EXTRACT
 from .utils import init_spark, normalize_nested_dict, make_directories
 from .analyze import analyze_flight_data
 
@@ -71,9 +74,9 @@ class FlightRadarPipeline:
             .repartition("tech_year", "tech_month", "tech_day", "tech_hour")
         )
 
-        flights_sdf.write.mode("append").parquet(
-            "flight_radar/src/data/silver/flights.parquet"
-        )
+        flights_sdf.write.mode("append").partitionBy(
+            "tech_year", "tech_month", "tech_day", "tech_hour"
+        ).parquet("flight_radar/src/data/silver/flights.parquet")
 
     def analyze(self):
         flights_sdf = self.spark.read.parquet(
@@ -110,12 +113,14 @@ class FlightRadarPipeline:
 
     def _extract_flights_details(self, flight_list):
         flight_dict_list = []
-        for flight in tqdm(flight_list[:50]):
+        for flight in tqdm(flight_list[:NUM_FLIGHTS_TO_EXTRACT]):
             try:
                 flight_details = self.fr_api.get_flight_details(flight)
                 flight_dict_list.append(flight_details)
             except HTTPError:
                 pass
+            except CloudflareError:
+                time.sleep(randrange(0, 1))
         return flight_dict_list
 
     def _extract_any_object(self, any_function):

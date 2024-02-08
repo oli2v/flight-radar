@@ -3,7 +3,7 @@ from pyspark.sql import SparkSession
 
 
 def init_spark(name):
-    spark = SparkSession.builder.appName(name).config("master", "local").getOrCreate()
+    spark = SparkSession.builder.appName(name).getOrCreate()
     return spark
 
 

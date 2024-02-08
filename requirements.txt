@@ -1,4 +1,3 @@
 FlightRadarAPI
 tqdm
-pandas
-apache-airflow-providers-apache-spark
+pandas==2.1.4
