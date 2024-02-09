@@ -2,7 +2,7 @@ import json
 import time
 from random import randrange
 from datetime import datetime
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, SSLError
 from tqdm import tqdm
 
 from FlightRadar24 import FlightRadar24API
@@ -119,7 +119,7 @@ class FlightRadarPipeline:
                 flight_dict_list.append(flight_details)
             except HTTPError:
                 pass
-            except CloudflareError:
+            except (CloudflareError, SSLError):
                 time.sleep(randrange(0, 1))
         return flight_dict_list
 
