@@ -17,4 +17,4 @@ KEY_TO_KEEP_LIST = [
     "time_scheduled_departure",
 ]
 
-NUM_FLIGHTS_TO_EXTRACT = 1500
+NUM_FLIGHTS_TO_EXTRACT = 50
