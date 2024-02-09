@@ -9,11 +9,13 @@ x-spark-common: &spark-common
     SPARK_RPC_ENCRYPTION_ENABLED: no
     SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: no
     SPARK_SSL_ENABLED: no
+  user: "1001"
+  volumes:
+    - data_volume:/opt/bitnami/spark/flight_radar/src/data
 
 services:
   spark-master:
     <<: *spark-common
-    user: "1001"
     environment:
       <<: *spark-common-env
       SPARK_MODE: master
@@ -23,7 +25,6 @@ services:
 
   spark-worker:
     <<: *spark-common
-    user: "1001"
     environment:
       <<: *spark-common-env
       SPARK_MODE: worker
@@ -32,3 +33,6 @@ services:
       SPARK_WORKER_CORES: 1
     depends_on:
       - spark-master
+
+volumes:
+  data_volume:
