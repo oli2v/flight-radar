@@ -3,7 +3,7 @@
 ## About the project
 This projects implements an ETL (Extract, Transform, Load) pipeline using the FlightRadar24 API which exposes real-time flights data, airports and airlines data.
 
-The goal of this project was to build a pipeline architecture able to provide answers the following questions:
+The goal of this project was to build a pipeline architecture able to provide answers to the following questions:
 1. Which airline has the most live flights?
 2. Which live flight has the longest route?
 3. Which aircraft manufacturer has the most live flights?
