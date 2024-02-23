@@ -2,6 +2,7 @@ import json
 import time
 from random import randrange
 from datetime import datetime
+import concurrent.futures
 from requests.exceptions import HTTPError, SSLError
 from tqdm import tqdm
 
@@ -10,8 +11,20 @@ from FlightRadar24.errors import CloudflareError
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col
 
-from .constants import KEY_TO_KEEP_LIST, NUM_FLIGHTS_TO_EXTRACT
-from .utils import init_spark, normalize_nested_dict, make_directories
+from .constants import (
+    KEY_TO_KEEP_LIST,
+    NUM_FLIGHTS_TO_EXTRACT,
+    FLIGHTS_SCHEMA,
+    LATITUDE_RANGE,
+    LONGITUDE_RANGE,
+)
+from .utils import (
+    init_spark,
+    normalize_nested_dict,
+    make_directories,
+    merge_flights,
+    split_map,
+)
 from .analyze import analyze_flight_data
 
 
@@ -73,15 +86,18 @@ class FlightRadarPipeline:
             .withColumn("created_at_ts", F.lit(self.current_time))
             .repartition("tech_year", "tech_month", "tech_day", "tech_hour")
         )
+        flights_sdf.show(10, False)
 
         flights_sdf.write.mode("append").partitionBy(
             "tech_year", "tech_month", "tech_day", "tech_hour"
         ).parquet("flight_radar/src/data/silver/flights.parquet")
 
     def analyze(self):
-        flights_sdf = self.spark.read.parquet(
-            "flight_radar/src/data/silver/flights.parquet"
-        ).filter(col("created_at_ts") == self.current_time)
+        flights_sdf = (
+            self.spark.read.schema(FLIGHTS_SCHEMA)
+            .parquet("flight_radar/src/data/silver/flights.parquet")
+            .filter(col("created_at_ts") == self.current_time)
+        )
         (
             live_flights_count_by_airline_pdf,
             live_flights_by_distance_pdf,
@@ -103,13 +119,20 @@ class FlightRadarPipeline:
                 index=False,
             )
 
-    def _extract_flights(self):
-        flight_list = self._extract_any_object(self.fr_api.get_flights)
-        return flight_list
-
     def _extract_airports(self):
         airport_list = self._extract_any_object(self.fr_api.get_airports)
         return airport_list
+
+    def _extract_flights(self):
+        bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            future_list = [
+                executor.submit(self.fr_api.get_flights, **{"bounds": bounds})
+                for bounds in bounds_list
+            ]
+            concurrent.futures.wait(future_list)
+        flight_list = merge_flights(future_list)
+        return flight_list
 
     def _extract_flights_details(self, flight_list):
         flight_dict_list = []
