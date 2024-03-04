@@ -10,18 +10,19 @@ from FlightRadar24 import FlightRadar24API
 from FlightRadar24.errors import CloudflareError
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col
+from google.cloud import storage
 
 from .constants import (
-    KEY_TO_KEEP_LIST,
     NUM_FLIGHTS_TO_EXTRACT,
     FLIGHTS_SCHEMA,
     LATITUDE_RANGE,
     LONGITUDE_RANGE,
+    GC_CREDENTIALS_FP,
+    GCS_BUCKET_NAME,
 )
 from .utils import (
     init_spark,
     normalize_nested_dict,
-    make_directories,
     merge_flights,
     split_map,
 )
@@ -44,60 +45,53 @@ class FlightRadarPipeline:
             f"tech_year={self.current_year}/tech_month={self.current_month}/"
             f"tech_day={self.current_day}/tech_hour={self.current_hour}"
         )
-        make_directories(self.destination_blob_name)
+        storage_client = storage.Client.from_service_account_json(GC_CREDENTIALS_FP)
+        self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
+
+    def upload_to_gcs(self, contents, destination_blob_name):
+        blob = self.bucket.blob(destination_blob_name)
+        blob.upload_from_string(contents)
+        print(f"Data uploaded to gs://{GCS_BUCKET_NAME}/{destination_blob_name}")
 
     def extract_all(self):
         flight_list = self._extract_flights()
         flight_dict_list = self._extract_flights_details(flight_list)
 
-        with open(
-            f"flight_radar/src/data/bronze/{self.destination_blob_name}/{self.raw_filename}",
-            "w",
-        ) as json_fp:
-            json.dump(flight_dict_list, json_fp)
+        self.upload_to_gcs(
+            json.dumps(flight_dict_list),
+            f"bronze/{self.destination_blob_name}/{self.raw_filename}",
+        )
 
     def process(self):
-        with open(
-            f"flight_radar/src/data/bronze/{self.destination_blob_name}/{self.raw_filename}",
-            "r",
-        ) as json_fp:
-            raw_flight_dict_list = json.load(json_fp)
+        blob = self.bucket.blob(
+            f"bronze/{self.destination_blob_name}/{self.raw_filename}"
+        )
+        raw_flight_dict_list = json.loads(blob.download_as_string(client=None))
 
         normalized_flight_dict_list = []
         for raw_flight_dict in raw_flight_dict_list:
             normalized_flight_dict = normalize_nested_dict(raw_flight_dict)
             normalized_flight_dict_list.append(normalized_flight_dict)
 
-        normalized_flight_dict_list = [
-            {
-                key: value
-                for key, value in normalized_flight_dict.items()
-                if key in KEY_TO_KEEP_LIST
-            }
-            for normalized_flight_dict in normalized_flight_dict_list
-        ]
-
         flights_sdf = (
-            self.spark.createDataFrame(normalized_flight_dict_list)
+            self.spark.createDataFrame(
+                normalized_flight_dict_list, schema=FLIGHTS_SCHEMA
+            )
             .withColumn("tech_year", F.lit(self.current_year))
             .withColumn("tech_month", F.lit(self.current_month))
             .withColumn("tech_day", F.lit(self.current_day))
             .withColumn("tech_hour", F.lit(self.current_hour))
             .withColumn("created_at_ts", F.lit(self.current_time))
-            .repartition("tech_year", "tech_month", "tech_day", "tech_hour")
         )
-        flights_sdf.show(10, False)
 
         flights_sdf.write.mode("append").partitionBy(
             "tech_year", "tech_month", "tech_day", "tech_hour"
-        ).parquet("flight_radar/src/data/silver/flights.parquet")
+        ).parquet(f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet")
 
     def analyze(self):
-        flights_sdf = (
-            self.spark.read.schema(FLIGHTS_SCHEMA)
-            .parquet("flight_radar/src/data/silver/flights.parquet")
-            .filter(col("created_at_ts") == self.current_time)
-        )
+        flights_sdf = self.spark.read.parquet(
+            "flight_radar/src/data/silver/flights.parquet"
+        ).filter(col("created_at_ts") == self.current_time)
         (
             live_flights_count_by_airline_pdf,
             live_flights_by_distance_pdf,

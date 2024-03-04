@@ -1,22 +1,40 @@
 import os
 from pyspark.sql import SparkSession
+from .constants import GC_CREDENTIALS_FP
 
 
 def init_spark(name):
-    spark = SparkSession.builder.appName(name).getOrCreate()
+    spark = (
+        SparkSession.builder.appName(name)
+        .config("spark.driver.memory", "4g")
+        .config("spark.jars", "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar")
+        .config("spark.jars", "gs://hadoop-lib/gcs/gcs-connector-latest-hadoop3.jar")
+        .getOrCreate()
+    )
+    spark.conf.set(
+        "spark.hadoop.fs.gs.impl",
+        "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem",
+    )
+    spark.conf.set("spark.hadoop.fs.gs.auth.service.account.enable", "true")
+    spark.conf.set(
+        "spark.hadoop.google.cloud.auth.service.account.json.keyfile", GC_CREDENTIALS_FP
+    )
     return spark
 
 
-def normalize_nested_dict(nested_dict, parent_key="", sep="_"):
+def normalize_nested_dict(nested_dict, sep="_"):
     normalized_dict = {}
-    for key, value in nested_dict.items():
-        new_key = f"{parent_key}{sep}{key}" if parent_key else key
-
+    queue_list = list(nested_dict.items())
+    while queue_list:
+        current_node = queue_list[0]
+        key, value = current_node
         if isinstance(value, dict):
-            normalized_dict.update(normalize_nested_dict(value, new_key, sep))
+            for sub_key, sub_value in value.items():
+                child_node = (f"{key}{sep}{sub_key}", sub_value)
+                queue_list.append(child_node)
         else:
-            normalized_dict[new_key] = value
-
+            normalized_dict[key] = value
+        queue_list.remove(current_node)
     return normalized_dict
 
 
