@@ -2,3 +2,6 @@
 version: 2
 
 models:
+  - name: flights
+    description: This table contains all the normalized flights extract from FlightRadar and uploaded to BigQuery
+    
