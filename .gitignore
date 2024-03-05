@@ -161,4 +161,6 @@ cython_debug/
 
 .gitkeep
 playground*
-*.json
+terraform.tfstate
+.terraform*
+*credentials*
