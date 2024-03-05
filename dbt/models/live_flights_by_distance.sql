@@ -7,7 +7,6 @@ with flights_filtered as (
     from {{ source('flight_radar_dataset', 'flights') }}
     where status_live
 )
-
 select
     *,
     round(
@@ -24,4 +23,4 @@ select
         4
     ) as distance_in_kms
 from flights_filtered
-order by distance_in_kms desc;
+order by distance_in_kms desc

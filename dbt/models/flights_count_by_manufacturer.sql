@@ -8,5 +8,6 @@ select
     manufacturer,
     count(distinct(identification_number_default)) as cnt,
 from temp
+where manufacturer is not null
 group by manufacturer
 order by cnt desc
