@@ -1,0 +1,7 @@
+version: 2
+
+sources:
+  - name: flight_radar_dataset
+    database: flight-radar-415911
+    tables:
+      - name: flights

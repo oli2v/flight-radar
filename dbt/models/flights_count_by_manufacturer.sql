@@ -2,7 +2,7 @@ with temp as (
     select
         identification_number_default,
         split(aircraft_model_text, ' ')[0] as manufacturer
-    from `flight_radar_dataset`.flights
+    from {{ source('flight_radar_dataset', 'flights') }}
 )
 select
     manufacturer,
