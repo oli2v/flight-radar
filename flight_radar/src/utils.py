@@ -1,4 +1,3 @@
-import os
 from pyspark.sql import SparkSession
 from .constants import GC_CREDENTIALS_FP
 
@@ -36,13 +35,6 @@ def normalize_nested_dict(nested_dict, sep="_"):
             normalized_dict[key] = value
         queue_list.remove(current_node)
     return normalized_dict
-
-
-def make_directories(destination_blob_name):
-    if not os.path.exists(f"flight_radar/src/data/bronze/{destination_blob_name}"):
-        os.makedirs(f"flight_radar/src/data/bronze/{destination_blob_name}")
-    if not os.path.exists(f"flight_radar/src/data/gold/{destination_blob_name}"):
-        os.makedirs(f"flight_radar/src/data/gold/{destination_blob_name}")
 
 
 def split_map(latitude_range, longitude_range):

@@ -7,6 +7,4 @@ def run_pipeline():
     pipeline.extract_all()
     print("Flights data fetched. Processing data...")
     pipeline.process()
-    print("Flights data processed. Analyzing data...")
-    pipeline.analyze()
-    print("Flights data analyzed. Done!")
+    print("Flights data processed.")

@@ -9,7 +9,6 @@ from tqdm import tqdm
 from FlightRadar24 import FlightRadar24API
 from FlightRadar24.errors import CloudflareError
 import pyspark.sql.functions as F
-from pyspark.sql.functions import col
 from google.cloud import storage
 
 from .constants import (
@@ -26,7 +25,6 @@ from .utils import (
     merge_flights,
     split_map,
 )
-from .analyze import analyze_flight_data
 
 
 class FlightRadarPipeline:
@@ -87,31 +85,6 @@ class FlightRadarPipeline:
         flights_sdf.write.mode("append").partitionBy(
             "tech_year", "tech_month", "tech_day", "tech_hour"
         ).parquet(f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet")
-
-    def analyze(self):
-        flights_sdf = self.spark.read.parquet(
-            "flight_radar/src/data/silver/flights.parquet"
-        ).filter(col("created_at_ts") == self.current_time)
-        (
-            live_flights_count_by_airline_pdf,
-            live_flights_by_distance_pdf,
-            flights_count_by_manufacturer_pdf,
-            model_count_by_airline_pdf,
-        ) = analyze_flight_data(flights_sdf)
-        filename_pdf_dict = {
-            "live_flights_count_by_airline": live_flights_count_by_airline_pdf,
-            "live_flights_by_distance": live_flights_by_distance_pdf,
-            "flights_count_by_manufacturer": flights_count_by_manufacturer_pdf,
-            "model_count_by_airline": model_count_by_airline_pdf,
-        }
-        for filename, any_pdf in filename_pdf_dict.items():
-            any_pdf.to_csv(
-                (
-                    f"flight_radar/src/data/gold/{self.destination_blob_name}/"
-                    f"{filename}_{self.formatted_time}.csv"
-                ),
-                index=False,
-            )
 
     def _extract_airports(self):
         airport_list = self._extract_any_object(self.fr_api.get_airports)
