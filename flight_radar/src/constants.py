@@ -2,15 +2,17 @@ import os
 from pyspark.sql.types import (
     StructType,
     StructField,
+    StringType,
     BooleanType,
     IntegerType,
-    StringType,
+    DoubleType,
     ArrayType,
 )
 
 NUM_FLIGHTS_TO_EXTRACT = 100
 LATITUDE_RANGE = range(-90, 91, 10)
 LONGITUDE_RANGE = range(-180, 181, 30)
+
 
 FLIGHTS_SCHEMA = StructType(
     [
@@ -25,8 +27,8 @@ FLIGHTS_SCHEMA = StructType(
             ArrayType(
                 StructType(
                     [
-                        StructField("lat", StringType(), True),
-                        StructField("lng", StringType(), True),
+                        StructField("lat", DoubleType(), True),
+                        StructField("lng", DoubleType(), True),
                         StructField("alt", IntegerType(), True),
                         StructField("spd", IntegerType(), True),
                         StructField("ts", StringType(), True),
@@ -54,8 +56,6 @@ FLIGHTS_SCHEMA = StructType(
         StructField("airline_name", StringType(), True),
         StructField("airline_short", StringType(), True),
         StructField("airline_url", StringType(), True),
-        StructField("airport_origin", StringType(), True),
-        StructField("airport_destination", StringType(), True),
         StructField("airport_real", StringType(), True),
         StructField(
             "flightHistory_aircraft",
@@ -70,7 +70,11 @@ FLIGHTS_SCHEMA = StructType(
                                     StructField(
                                         "number",
                                         StructType(
-                                            [StructField("default", StringType(), True)]
+                                            [
+                                                StructField(
+                                                    "default", StringType(), True
+                                                ),
+                                            ]
                                         ),
                                         True,
                                     ),
@@ -82,27 +86,292 @@ FLIGHTS_SCHEMA = StructType(
                             "airport",
                             StructType(
                                 [
-                                    StructField("origin", StringType(), True),
-                                    StructField("destination", StringType(), True),
-                                ]
-                            ),
-                            True,
-                        ),
-                        StructField(
-                            "time",
-                            StructType(
-                                [
                                     StructField(
-                                        "real",
+                                        "origin",
                                         StructType(
                                             [
+                                                StructField("name", StringType(), True),
                                                 StructField(
-                                                    "departure", StringType(), True
-                                                )
+                                                    "code",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "iata",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "icao",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                                StructField(
+                                                    "position",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "latitude",
+                                                                DoubleType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "longitude",
+                                                                DoubleType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "altitude",
+                                                                IntegerType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "country",
+                                                                StructType(
+                                                                    [
+                                                                        StructField(
+                                                                            "id",
+                                                                            IntegerType(),
+                                                                            True,
+                                                                        ),
+                                                                        StructField(
+                                                                            "name",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                        StructField(
+                                                                            "code",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                        StructField(
+                                                                            "codeLong",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                    ]
+                                                                ),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "region",
+                                                                StructType(
+                                                                    [
+                                                                        StructField(
+                                                                            "city",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                    ]
+                                                                ),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                                StructField(
+                                                    "timezone",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "name",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "offset",
+                                                                IntegerType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "offsetHours",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "abbr",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "abbrName",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "isDst",
+                                                                BooleanType(),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                                StructField(
+                                                    "visible", BooleanType(), True
+                                                ),
+                                                StructField(
+                                                    "website", StringType(), True
+                                                ),
                                             ]
                                         ),
                                         True,
-                                    )
+                                    ),
+                                    StructField(
+                                        "destination",
+                                        StructType(
+                                            [
+                                                StructField("name", StringType(), True),
+                                                StructField(
+                                                    "code",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "iata",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "icao",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                                StructField(
+                                                    "position",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "latitude",
+                                                                DoubleType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "longitude",
+                                                                DoubleType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "altitude",
+                                                                IntegerType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "country",
+                                                                StructType(
+                                                                    [
+                                                                        StructField(
+                                                                            "id",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                        StructField(
+                                                                            "name",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                        StructField(
+                                                                            "code",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                    ]
+                                                                ),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "region",
+                                                                StructType(
+                                                                    [
+                                                                        StructField(
+                                                                            "city",
+                                                                            StringType(),
+                                                                            True,
+                                                                        ),
+                                                                    ]
+                                                                ),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                                StructField(
+                                                    "timezone",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "name",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "offset",
+                                                                IntegerType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "offsetHours",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "abbr",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "abbrName",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                            StructField(
+                                                                "isDst",
+                                                                BooleanType(),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                                StructField(
+                                                    "visible", BooleanType(), True
+                                                ),
+                                                StructField(
+                                                    "website", StringType(), True
+                                                ),
+                                            ]
+                                        ),
+                                        True,
+                                    ),
+                                    StructField(
+                                        "time",
+                                        StructType(
+                                            [
+                                                StructField(
+                                                    "real",
+                                                    StructType(
+                                                        [
+                                                            StructField(
+                                                                "departure",
+                                                                StringType(),
+                                                                True,
+                                                            ),
+                                                        ]
+                                                    ),
+                                                    True,
+                                                ),
+                                            ]
+                                        ),
+                                        True,
+                                    ),
                                 ]
                             ),
                             True,
@@ -112,7 +381,6 @@ FLIGHTS_SCHEMA = StructType(
             ),
             True,
         ),
-        StructField("time_historical", StringType(), True),
         StructField("identification_number_default", StringType(), True),
         StructField("identification_number_alternative", StringType(), True),
         StructField("aircraft_model_code", StringType(), True),
@@ -161,19 +429,72 @@ FLIGHTS_SCHEMA = StructType(
         ),
         StructField("airline_code_iata", StringType(), True),
         StructField("airline_code_icao", StringType(), True),
-        StructField("time_scheduled_departure", IntegerType(), True),
-        StructField("time_scheduled_arrival", IntegerType(), True),
+        StructField("airport_origin_name", StringType(), True),
+        StructField("airport_origin_visible", BooleanType(), True),
+        StructField("airport_origin_website", StringType(), True),
+        StructField("airport_destination_name", StringType(), True),
+        StructField("airport_destination_visible", BooleanType(), True),
+        StructField("airport_destination_website", StringType(), True),
+        StructField("time_scheduled_departure", StringType(), True),
+        StructField("time_scheduled_arrival", StringType(), True),
         StructField("time_real_departure", StringType(), True),
         StructField("time_real_arrival", StringType(), True),
         StructField("time_estimated_departure", StringType(), True),
         StructField("time_estimated_arrival", StringType(), True),
-        StructField("time_other_eta", IntegerType(), True),
-        StructField("time_other_updated", IntegerType(), True),
+        StructField("time_other_eta", StringType(), True),
+        StructField("time_other_updated", StringType(), True),
+        StructField("time_historical_flighttime", StringType(), True),
+        StructField("time_historical_delay", StringType(), True),
         StructField("status_generic_status_text", StringType(), True),
         StructField("status_generic_status_color", StringType(), True),
         StructField("status_generic_status_type", StringType(), True),
+        StructField("status_generic_eventTime_utc", StringType(), True),
+        StructField("status_generic_eventTime_local", StringType(), True),
+        StructField("airport_origin_code_iata", StringType(), True),
+        StructField("airport_origin_code_icao", StringType(), True),
+        StructField("airport_origin_position_latitude", DoubleType(), True),
+        StructField("airport_origin_position_longitude", DoubleType(), True),
+        StructField("airport_origin_position_altitude", IntegerType(), True),
+        StructField("airport_origin_timezone_name", StringType(), True),
+        StructField("airport_origin_timezone_offset", IntegerType(), True),
+        StructField("airport_origin_timezone_offsetHours", StringType(), True),
+        StructField("airport_origin_timezone_abbr", StringType(), True),
+        StructField("airport_origin_timezone_abbrName", StringType(), True),
+        StructField("airport_origin_timezone_isDst", BooleanType(), True),
+        StructField("airport_origin_info_terminal", StringType(), True),
+        StructField("airport_origin_info_baggage", StringType(), True),
+        StructField("airport_origin_info_gate", StringType(), True),
+        StructField("airport_destination_code_iata", StringType(), True),
+        StructField("airport_destination_code_icao", StringType(), True),
+        StructField("airport_destination_position_latitude", DoubleType(), True),
+        StructField("airport_destination_position_longitude", DoubleType(), True),
+        StructField("airport_destination_position_altitude", IntegerType(), True),
+        StructField("airport_destination_timezone_name", StringType(), True),
+        StructField("airport_destination_timezone_offset", IntegerType(), True),
+        StructField("airport_destination_timezone_offsetHours", StringType(), True),
+        StructField("airport_destination_timezone_abbr", StringType(), True),
+        StructField("airport_destination_timezone_abbrName", StringType(), True),
+        StructField("airport_destination_timezone_isDst", BooleanType(), True),
+        StructField("airport_destination_info_terminal", StringType(), True),
+        StructField("airport_destination_info_baggage", StringType(), True),
+        StructField("airport_destination_info_gate", StringType(), True),
+        StructField("airport_origin_position_country_id", StringType(), True),
+        StructField("airport_origin_position_country_name", StringType(), True),
+        StructField("airport_origin_position_country_code", StringType(), True),
+        StructField("airport_origin_position_region_city", StringType(), True),
+        StructField("airport_destination_position_country_id", StringType(), True),
+        StructField("airport_destination_position_country_name", StringType(), True),
+        StructField("airport_destination_position_country_code", StringType(), True),
+        StructField(
+            "airport_destination_position_country_codeLong", StringType(), True
+        ),
+        StructField("airport_destination_position_region_city", StringType(), True),
     ]
 )
 
+
 GC_CREDENTIALS_FP = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 GCS_BUCKET_NAME = "flight-radar-bucket"
+GOOGLE_PROJECT_NAME = "flight-radar-415911"
+BQ_DATASET_NAME = "flight_radar_dataset"
+BQ_TABLE_NAME = "flights"

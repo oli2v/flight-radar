@@ -9,7 +9,8 @@ from tqdm import tqdm
 from FlightRadar24 import FlightRadar24API
 from FlightRadar24.errors import CloudflareError
 import pyspark.sql.functions as F
-from google.cloud import storage
+from google.cloud import storage, bigquery
+
 
 from .constants import (
     NUM_FLIGHTS_TO_EXTRACT,
@@ -18,6 +19,9 @@ from .constants import (
     LONGITUDE_RANGE,
     GC_CREDENTIALS_FP,
     GCS_BUCKET_NAME,
+    GOOGLE_PROJECT_NAME,
+    BQ_DATASET_NAME,
+    BQ_TABLE_NAME,
 )
 from .utils import (
     init_spark,
@@ -44,6 +48,8 @@ class FlightRadarPipeline:
             f"tech_day={self.current_day}/tech_hour={self.current_hour}"
         )
         storage_client = storage.Client.from_service_account_json(GC_CREDENTIALS_FP)
+        self.bq_client = bigquery.Client.from_service_account_json(GC_CREDENTIALS_FP)
+        self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
         self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
 
     def upload_to_gcs(self, contents, destination_blob_name):
@@ -86,9 +92,16 @@ class FlightRadarPipeline:
             "tech_year", "tech_month", "tech_day", "tech_hour"
         ).parquet(f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet")
 
-    def _extract_airports(self):
-        airport_list = self._extract_any_object(self.fr_api.get_airports)
-        return airport_list
+        job_config = bigquery.LoadJobConfig(
+            source_format=bigquery.SourceFormat.PARQUET,
+        )
+        uri = f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/*.parquet"
+        load_job = self.bq_client.load_table_from_uri(
+            uri, self.table_id, job_config=job_config
+        )  # Make an API request.
+        load_job.result()
+        destination_table = self.bq_client.get_table(self.table_id)
+        print(f"Loaded {destination_table.num_rows} rows.")
 
     def _extract_flights(self):
         bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)

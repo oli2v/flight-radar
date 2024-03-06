@@ -32,14 +32,14 @@ resource "google_bigquery_dataset" "default" {
   }
 }
 
-resource "google_bigquery_table" "default" {
-  dataset_id = google_bigquery_dataset.default.dataset_id
-  table_id   = "flights"
+# resource "google_bigquery_table" "default" {
+#   dataset_id = google_bigquery_dataset.default.dataset_id
+#   table_id   = "flights"
 
-  labels = {
-    env = "default"
-  }
+#   labels = {
+#     env = "default"
+#   }
 
-  schema = file("flights_schema.json")
+#   schema = file("flights_schema.json")
 
-}
+# }
