@@ -2,24 +2,25 @@ import json
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from google.cloud import bigquery
-from .constants import GC_CREDENTIALS_FP
+
+# from .constants import GC_CREDENTIALS_FP
 
 
 def init_spark(name):
     spark = (
         SparkSession.builder.appName(name)
-        .config("spark.jars", "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar")
-        .config("spark.jars", "gs://hadoop-lib/gcs/gcs-connector-latest-hadoop3.jar")
+        # .config("spark.jars", "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar")
+        # .config("spark.jars", "gs://hadoop-lib/gcs/gcs-connector-latest-hadoop3.jar")
         .getOrCreate()
     )
-    spark.conf.set(
-        "spark.hadoop.fs.gs.impl",
-        "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem",
-    )
-    spark.conf.set("spark.hadoop.fs.gs.auth.service.account.enable", "true")
-    spark.conf.set(
-        "spark.hadoop.google.cloud.auth.service.account.json.keyfile", GC_CREDENTIALS_FP
-    )
+    # spark.conf.set(
+    #     "spark.hadoop.fs.gs.impl",
+    #     "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem",
+    # )
+    # spark.conf.set("spark.hadoop.fs.gs.auth.service.account.enable", "true")
+    # spark.conf.set(
+    #     "spark.hadoop.google.cloud.auth.service.account.json.keyfile", GC_CREDENTIALS_FP
+    # )
     return spark
 
 
