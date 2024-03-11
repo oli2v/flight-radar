@@ -5,14 +5,13 @@ from pyspark.sql.types import (
     StringType,
     BooleanType,
     IntegerType,
-    DoubleType,
     ArrayType,
 )
 
 NUM_FLIGHTS_TO_EXTRACT = 100
 LATITUDE_RANGE = range(-90, 91, 10)
 LONGITUDE_RANGE = range(-180, 181, 30)
-
+PARTITION_BY_COL_LIST = ["tech_year", "tech_month", "tech_day", "tech_hour"]
 
 FLIGHTS_SCHEMA = StructType(
     [
@@ -27,8 +26,8 @@ FLIGHTS_SCHEMA = StructType(
             ArrayType(
                 StructType(
                     [
-                        StructField("lat", DoubleType(), True),
-                        StructField("lng", DoubleType(), True),
+                        StructField("lat", StringType(), True),
+                        StructField("lng", StringType(), True),
                         StructField("alt", IntegerType(), True),
                         StructField("spd", IntegerType(), True),
                         StructField("ts", StringType(), True),
@@ -115,12 +114,12 @@ FLIGHTS_SCHEMA = StructType(
                                                         [
                                                             StructField(
                                                                 "latitude",
-                                                                DoubleType(),
+                                                                StringType(),
                                                                 True,
                                                             ),
                                                             StructField(
                                                                 "longitude",
-                                                                DoubleType(),
+                                                                StringType(),
                                                                 True,
                                                             ),
                                                             StructField(
@@ -250,12 +249,12 @@ FLIGHTS_SCHEMA = StructType(
                                                         [
                                                             StructField(
                                                                 "latitude",
-                                                                DoubleType(),
+                                                                StringType(),
                                                                 True,
                                                             ),
                                                             StructField(
                                                                 "longitude",
-                                                                DoubleType(),
+                                                                StringType(),
                                                                 True,
                                                             ),
                                                             StructField(
@@ -452,8 +451,8 @@ FLIGHTS_SCHEMA = StructType(
         StructField("status_generic_eventTime_local", StringType(), True),
         StructField("airport_origin_code_iata", StringType(), True),
         StructField("airport_origin_code_icao", StringType(), True),
-        StructField("airport_origin_position_latitude", DoubleType(), True),
-        StructField("airport_origin_position_longitude", DoubleType(), True),
+        StructField("airport_origin_position_latitude", StringType(), True),
+        StructField("airport_origin_position_longitude", StringType(), True),
         StructField("airport_origin_position_altitude", IntegerType(), True),
         StructField("airport_origin_timezone_name", StringType(), True),
         StructField("airport_origin_timezone_offset", IntegerType(), True),
@@ -466,8 +465,8 @@ FLIGHTS_SCHEMA = StructType(
         StructField("airport_origin_info_gate", StringType(), True),
         StructField("airport_destination_code_iata", StringType(), True),
         StructField("airport_destination_code_icao", StringType(), True),
-        StructField("airport_destination_position_latitude", DoubleType(), True),
-        StructField("airport_destination_position_longitude", DoubleType(), True),
+        StructField("airport_destination_position_latitude", StringType(), True),
+        StructField("airport_destination_position_longitude", StringType(), True),
         StructField("airport_destination_position_altitude", IntegerType(), True),
         StructField("airport_destination_timezone_name", StringType(), True),
         StructField("airport_destination_timezone_offset", IntegerType(), True),

@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from FlightRadar24 import FlightRadar24API
 from FlightRadar24.errors import CloudflareError
-import pyspark.sql.functions as F
 from google.cloud import storage, bigquery
 
 
@@ -22,12 +21,18 @@ from .constants import (
     GOOGLE_PROJECT_NAME,
     BQ_DATASET_NAME,
     BQ_TABLE_NAME,
+    PARTITION_BY_COL_LIST,
 )
 from .utils import (
     init_spark,
-    normalize_nested_dict,
     merge_flights,
     split_map,
+    get_json_from_gcs,
+    normalize_data,
+    create_sdf_from_dict_list,
+    write_sdf_to_gcs,
+    load_parquet_to_bq,
+    upload_dict_list_to_gcs,
 )
 
 
@@ -52,56 +57,39 @@ class FlightRadarPipeline:
         self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
         self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
 
-    def upload_to_gcs(self, contents, destination_blob_name):
-        blob = self.bucket.blob(destination_blob_name)
-        blob.upload_from_string(contents)
-        print(f"Data uploaded to gs://{GCS_BUCKET_NAME}/{destination_blob_name}")
-
-    def extract_all(self):
+    def extract(self):
         flight_list = self._extract_flights()
         flight_dict_list = self._extract_flights_details(flight_list)
-
-        self.upload_to_gcs(
+        upload_dict_list_to_gcs(
+            self.bucket,
             json.dumps(flight_dict_list),
             f"bronze/{self.destination_blob_name}/{self.raw_filename}",
         )
 
-    def process(self):
-        blob = self.bucket.blob(
-            f"bronze/{self.destination_blob_name}/{self.raw_filename}"
+    def transform(self):
+        raw_flight_dict_list = get_json_from_gcs(
+            self.bucket, self.destination_blob_name, self.raw_filename
         )
-        raw_flight_dict_list = json.loads(blob.download_as_string(client=None))
-
-        normalized_flight_dict_list = []
-        for raw_flight_dict in raw_flight_dict_list:
-            normalized_flight_dict = normalize_nested_dict(raw_flight_dict)
-            normalized_flight_dict_list.append(normalized_flight_dict)
-
-        flights_sdf = (
-            self.spark.createDataFrame(
-                normalized_flight_dict_list, schema=FLIGHTS_SCHEMA
-            )
-            .withColumn("tech_year", F.lit(self.current_year))
-            .withColumn("tech_month", F.lit(self.current_month))
-            .withColumn("tech_day", F.lit(self.current_day))
-            .withColumn("tech_hour", F.lit(self.current_hour))
-            .withColumn("created_at_ts", F.lit(self.current_time))
+        normalized_flight_dict_list = normalize_data(raw_flight_dict_list)
+        flights_sdf = create_sdf_from_dict_list(
+            self.spark,
+            normalized_flight_dict_list,
+            FLIGHTS_SCHEMA,
+            self.current_year,
+            self.current_month,
+            self.current_day,
+            self.current_hour,
+            self.current_time,
         )
+        return flights_sdf
 
-        flights_sdf.write.mode("append").partitionBy(
-            "tech_year", "tech_month", "tech_day", "tech_hour"
-        ).parquet(f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet")
-
-        job_config = bigquery.LoadJobConfig(
-            source_format=bigquery.SourceFormat.PARQUET,
+    def load(self, any_sdf):
+        uri = (
+            f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/"
+            "*.parquet"
         )
-        uri = f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/*.parquet"
-        load_job = self.bq_client.load_table_from_uri(
-            uri, self.table_id, job_config=job_config
-        )  # Make an API request.
-        load_job.result()
-        destination_table = self.bq_client.get_table(self.table_id)
-        print(f"Loaded {destination_table.num_rows} rows.")
+        write_sdf_to_gcs(any_sdf, uri, PARTITION_BY_COL_LIST)
+        load_parquet_to_bq(uri, self.bq_client, self.table_id)
 
     def _extract_flights(self):
         bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
@@ -125,7 +113,3 @@ class FlightRadarPipeline:
             except (CloudflareError, SSLError):
                 time.sleep(randrange(0, 1))
         return flight_dict_list
-
-    def _extract_any_object(self, any_function):
-        obj_list = any_function()
-        return obj_list
