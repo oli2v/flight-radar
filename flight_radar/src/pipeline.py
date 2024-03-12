@@ -102,12 +102,13 @@ class FlightRadarPipeline:
 
     def load(self, any_sdf: DataFrame) -> None:
         logging.info("Uploading flights data to BigQuery...")
-        uri = (
+        writing_uri = f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}"
+        loading_uri = (
             f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/"
             "*.parquet"
         )
-        write_sdf_to_gcs(any_sdf, uri, PARTITION_BY_COL_LIST)
-        load_parquet_to_bq(uri, self.bq_client, self.table_id)
+        write_sdf_to_gcs(any_sdf, writing_uri, PARTITION_BY_COL_LIST)
+        load_parquet_to_bq(loading_uri, self.bq_client, self.table_id)
         destination_table = self.bq_client.get_table(self.table_id)
         logging.info(
             "Loaded %d rows into BigQuery table %s.",
