@@ -1,5 +1,6 @@
 import json
 import time
+import logging
 from random import randrange
 from datetime import datetime
 from typing import List, Dict, Optional, Any
@@ -15,7 +16,6 @@ from google.cloud import storage, bigquery
 
 
 from .constants import (
-    NUM_FLIGHTS_TO_EXTRACT,
     FLIGHTS_SCHEMA,
     LATITUDE_RANGE,
     LONGITUDE_RANGE,
@@ -59,7 +59,13 @@ class FlightRadarPipeline:
         self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
         self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
 
+    def run(self) -> None:
+        self.extract()
+        flights_sdf = self.transform()
+        self.load(flights_sdf)
+
     def extract(self) -> None:
+        logging.info("Fetching data from FlightRadar API...")
         flight_list = self._extract_flights()
         flight_dict_list = self._extract_flights_details(flight_list)
         upload_dict_list_to_gcs(
@@ -67,12 +73,21 @@ class FlightRadarPipeline:
             json.dumps(flight_dict_list),
             f"bronze/{self.destination_blob_name}/{self.raw_filename}",
         )
+        logging.info(
+            "Uploaded %d flights to GCS bucket: %s.",
+            len(flight_dict_list),
+            GCS_BUCKET_NAME,
+        )
 
     def transform(self) -> None:
+        logging.info("Processing data...")
         raw_flight_dict_list = get_json_from_gcs(
             self.bucket, self.destination_blob_name, self.raw_filename
         )
         normalized_flight_dict_list = normalize_data(raw_flight_dict_list)
+        logging.info(
+            "Normalized data about %d flights.", len(normalized_flight_dict_list)
+        )
         flights_sdf = create_sdf_from_dict_list(
             self.spark,
             normalized_flight_dict_list,
@@ -86,12 +101,19 @@ class FlightRadarPipeline:
         return flights_sdf
 
     def load(self, any_sdf: DataFrame) -> None:
+        logging.info("Uploading flights data to BigQuery...")
         uri = (
             f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/"
             "*.parquet"
         )
         write_sdf_to_gcs(any_sdf, uri, PARTITION_BY_COL_LIST)
         load_parquet_to_bq(uri, self.bq_client, self.table_id)
+        destination_table = self.bq_client.get_table(self.table_id)
+        logging.info(
+            "Loaded %d rows into BigQuery table %s.",
+            destination_table.num_rows,
+            BQ_TABLE_NAME,
+        )
 
     def _extract_flights(self) -> List[Optional[Flight]]:
         bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
@@ -102,18 +124,21 @@ class FlightRadarPipeline:
             ]
             concurrent.futures.wait(future_list)
         flight_list = merge_flights(future_list)
+        logging.info("Extracted %d flights.", len(flight_list))
         return flight_list
 
     def _extract_flights_details(
         self, flight_list: List[Flight]
     ) -> List[Optional[Dict[Any:Any]]]:
         flight_dict_list = []
-        for flight in tqdm(flight_list[:NUM_FLIGHTS_TO_EXTRACT]):
+        for flight in tqdm(flight_list):
             try:
                 flight_details = self.fr_api.get_flight_details(flight)
                 flight_dict_list.append(flight_details)
             except HTTPError:
-                pass
+                logging.warning("Exception occurred", exc_info=True)
             except (CloudflareError, SSLError):
+                logging.warning("Exception occurred", exc_info=True)
                 time.sleep(randrange(0, 1))
+        logging.info("Extracted details about %d flights.", len(flight_dict_list))
         return flight_dict_list

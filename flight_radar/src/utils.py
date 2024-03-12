@@ -93,8 +93,6 @@ def load_parquet_to_bq(uri: str, bq_client: Client, table_id: str) -> None:
     )
     load_job = bq_client.load_table_from_uri(uri, table_id, job_config=job_config)
     load_job.result()
-    destination_table = bq_client.get_table(table_id)
-    print(f"Loaded {destination_table.num_rows} rows.")
 
 
 def upload_dict_list_to_gcs(bucket: Bucket, contents: str, destination_blob_name: str):
