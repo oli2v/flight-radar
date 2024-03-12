@@ -3,41 +3,18 @@ from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from google.cloud import bigquery
 
-# from .constants import GC_CREDENTIALS_FP
-
 
 def init_spark(name):
-    spark = (
-        SparkSession.builder.appName(name)
-        # .config("spark.jars", "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar")
-        # .config("spark.jars", "gs://hadoop-lib/gcs/gcs-connector-latest-hadoop3.jar")
-        .getOrCreate()
-    )
-    # spark.conf.set(
-    #     "spark.hadoop.fs.gs.impl",
-    #     "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem",
-    # )
-    # spark.conf.set("spark.hadoop.fs.gs.auth.service.account.enable", "true")
-    # spark.conf.set(
-    #     "spark.hadoop.google.cloud.auth.service.account.json.keyfile", GC_CREDENTIALS_FP
-    # )
+    spark = SparkSession.builder.appName(name).getOrCreate()
     return spark
 
 
-def normalize_nested_dict(nested_dict, sep="_"):
-    normalized_dict = {}
-    queue_list = list(nested_dict.items())
-    while queue_list:
-        current_node = queue_list[0]
-        key, value = current_node
-        if isinstance(value, dict):
-            for sub_key, sub_value in value.items():
-                child_node = (f"{key}{sep}{sub_key}", sub_value)
-                queue_list.append(child_node)
-        else:
-            normalized_dict[key] = value
-        queue_list.remove(current_node)
-    return normalized_dict
+def normalize_data(raw_flight_dict_list):
+    normalized_flight_dict_list = []
+    for raw_flight_dict in raw_flight_dict_list:
+        normalized_flight_dict = _normalize_nested_dict(raw_flight_dict)
+        normalized_flight_dict_list.append(normalized_flight_dict)
+    return normalized_flight_dict_list
 
 
 def split_map(latitude_range, longitude_range):
@@ -67,14 +44,6 @@ def get_json_from_gcs(bucket, destination_blob_name, raw_filename):
     blob = bucket.blob(f"bronze/{destination_blob_name}/{raw_filename}")
     any_dict_list = json.loads(blob.download_as_string(client=None))
     return any_dict_list
-
-
-def normalize_data(raw_flight_dict_list):
-    normalized_flight_dict_list = []
-    for raw_flight_dict in raw_flight_dict_list:
-        normalized_flight_dict = normalize_nested_dict(raw_flight_dict)
-        normalized_flight_dict_list.append(normalized_flight_dict)
-    return normalized_flight_dict_list
 
 
 def create_sdf_from_dict_list(
@@ -114,3 +83,19 @@ def load_parquet_to_bq(uri, bq_client, table_id):
 def upload_dict_list_to_gcs(bucket, contents, destination_blob_name):
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_string(contents)
+
+
+def _normalize_nested_dict(nested_dict, sep="_"):
+    normalized_dict = {}
+    queue_list = list(nested_dict.items())
+    while queue_list:
+        current_node = queue_list[0]
+        key, value = current_node
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                child_node = (f"{key}{sep}{sub_key}", sub_value)
+                queue_list.append(child_node)
+        else:
+            normalized_dict[key] = value
+        queue_list.remove(current_node)
+    return normalized_dict

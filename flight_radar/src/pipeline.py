@@ -16,7 +16,6 @@ from .constants import (
     FLIGHTS_SCHEMA,
     LATITUDE_RANGE,
     LONGITUDE_RANGE,
-    GC_CREDENTIALS_FP,
     GCS_BUCKET_NAME,
     GOOGLE_PROJECT_NAME,
     BQ_DATASET_NAME,
@@ -52,8 +51,8 @@ class FlightRadarPipeline:
             f"tech_year={self.current_year}/tech_month={self.current_month}/"
             f"tech_day={self.current_day}/tech_hour={self.current_hour}"
         )
-        storage_client = storage.Client.from_service_account_json(GC_CREDENTIALS_FP)
-        self.bq_client = bigquery.Client.from_service_account_json(GC_CREDENTIALS_FP)
+        storage_client = storage.Client()
+        self.bq_client = bigquery.Client()
         self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
         self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
 
