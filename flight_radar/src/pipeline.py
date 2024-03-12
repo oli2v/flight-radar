@@ -130,7 +130,7 @@ class FlightRadarPipeline:
 
     def _extract_flights_details(
         self, flight_list: List[Flight]
-    ) -> List[Optional[Dict[Any:Any]]]:
+    ) -> List[Optional[Dict[Any, Any]]]:
         flight_dict_list = []
         for flight in tqdm(flight_list):
             try:

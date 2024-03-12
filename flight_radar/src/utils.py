@@ -21,8 +21,8 @@ def init_spark(name: str) -> SparkSession:
 
 
 def normalize_data(
-    any_dict_list: List[Optional[Dict[Any:Any]]],
-) -> List[Optional[Dict[str:Any]]]:
+    any_dict_list: List[Optional[Dict[Any, Any]]],
+) -> List[Optional[Dict[str, Any]]]:
     normalized_dict_list = []
     for any_dict in any_dict_list:
         normalized_flight_dict = _normalize_nested_dict(any_dict)
@@ -55,7 +55,7 @@ def merge_flights(future_list: List[Optional[List[Future]]]) -> List[Optional[Fl
 
 def get_json_from_gcs(
     bucket: Bucket, destination_blob_name: str, raw_filename: str
-) -> List[Optional[Dict[Any:Any]]]:
+) -> List[Optional[Dict[Any, Any]]]:
     blob = bucket.blob(f"bronze/{destination_blob_name}/{raw_filename}")
     any_dict_list = json.loads(blob.download_as_string(client=None))
     return any_dict_list
@@ -63,7 +63,7 @@ def get_json_from_gcs(
 
 def create_sdf_from_dict_list(
     spark: SparkSession,
-    any_dict_list: List[Optional[Dict[str:Any]]],
+    any_dict_list: List[Optional[Dict[str, Any]]],
     schema: StructType,
     current_year: int,
     current_month: int,
@@ -100,7 +100,9 @@ def upload_dict_list_to_gcs(bucket: Bucket, contents: str, destination_blob_name
     blob.upload_from_string(contents)
 
 
-def _normalize_nested_dict(nested_dict: Dict[Any:Any], sep: str = "_") -> Dict[str:Any]:
+def _normalize_nested_dict(
+    nested_dict: Dict[Any, Any], sep: str = "_"
+) -> Dict[str, Any]:
     normalized_dict = {}
     queue_list = list(nested_dict.items())
     while queue_list:
