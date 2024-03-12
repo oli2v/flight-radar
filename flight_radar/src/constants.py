@@ -1,4 +1,3 @@
-import os
 from pyspark.sql.types import (
     StructType,
     StructField,
@@ -492,7 +491,6 @@ FLIGHTS_SCHEMA = StructType(
 )
 
 
-GC_CREDENTIALS_FP = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 GCS_BUCKET_NAME = "flight-radar-bucket"
 GOOGLE_PROJECT_NAME = "flight-radar-415911"
 BQ_DATASET_NAME = "flight_radar_dataset"

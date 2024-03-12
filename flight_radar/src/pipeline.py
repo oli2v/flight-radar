@@ -2,12 +2,15 @@ import json
 import time
 from random import randrange
 from datetime import datetime
+from typing import List, Dict, Optional, Any
 import concurrent.futures
 from requests.exceptions import HTTPError, SSLError
 from tqdm import tqdm
 
+from pyspark.sql import DataFrame
 from FlightRadar24 import FlightRadar24API
 from FlightRadar24.errors import CloudflareError
+from FlightRadar24.api import Flight
 from google.cloud import storage, bigquery
 
 
@@ -56,7 +59,7 @@ class FlightRadarPipeline:
         self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
         self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
 
-    def extract(self):
+    def extract(self) -> None:
         flight_list = self._extract_flights()
         flight_dict_list = self._extract_flights_details(flight_list)
         upload_dict_list_to_gcs(
@@ -65,7 +68,7 @@ class FlightRadarPipeline:
             f"bronze/{self.destination_blob_name}/{self.raw_filename}",
         )
 
-    def transform(self):
+    def transform(self) -> None:
         raw_flight_dict_list = get_json_from_gcs(
             self.bucket, self.destination_blob_name, self.raw_filename
         )
@@ -82,7 +85,7 @@ class FlightRadarPipeline:
         )
         return flights_sdf
 
-    def load(self, any_sdf):
+    def load(self, any_sdf: DataFrame) -> None:
         uri = (
             f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/"
             "*.parquet"
@@ -90,7 +93,7 @@ class FlightRadarPipeline:
         write_sdf_to_gcs(any_sdf, uri, PARTITION_BY_COL_LIST)
         load_parquet_to_bq(uri, self.bq_client, self.table_id)
 
-    def _extract_flights(self):
+    def _extract_flights(self) -> List[Optional[Flight]]:
         bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_list = [
@@ -101,7 +104,9 @@ class FlightRadarPipeline:
         flight_list = merge_flights(future_list)
         return flight_list
 
-    def _extract_flights_details(self, flight_list):
+    def _extract_flights_details(
+        self, flight_list: List[Flight]
+    ) -> List[Optional[Dict[Any:Any]]]:
         flight_dict_list = []
         for flight in tqdm(flight_list[:NUM_FLIGHTS_TO_EXTRACT]):
             try:
