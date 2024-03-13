@@ -35,6 +35,8 @@ from .utils import (
     write_sdf_to_gcs,
     load_parquet_to_bq,
     upload_dict_list_to_gcs,
+    get_directory,
+    get_raw_filename,
 )
 
 
@@ -44,20 +46,11 @@ class FlightRadarPipeline:
         self.fr_api = FlightRadar24API()
         self.spark = init_spark("flight-radar-spark")
         self.current_time = datetime.now()
-        self.current_year = self.current_time.year
-        self.current_month = self.current_time.month
-        self.current_day = self.current_time.day
-        self.current_hour = self.current_time.hour
-        self.formatted_time = self.current_time.strftime("%Y%m%d%H%M%S%f")[:-3]
-        self.raw_filename = f"flights_{self.formatted_time}.json"
-        self.destination_blob_name = (
-            f"tech_year={self.current_year}/tech_month={self.current_month}/"
-            f"tech_day={self.current_day}/tech_hour={self.current_hour}"
-        )
-        storage_client = storage.Client()
+        self.directory = get_directory(self.current_time)
         self.bq_client = bigquery.Client()
         self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
-        self.bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        self.bucket = storage.Client().bucket(GCS_BUCKET_NAME)
+        self.flight_raw_filename = get_raw_filename("flights", self.current_time)
 
     def run(self) -> None:
         self.extract()
@@ -68,10 +61,11 @@ class FlightRadarPipeline:
         logging.info("Fetching data from FlightRadar API...")
         flight_list = self._extract_flights()
         flight_dict_list = self._extract_flights_details(flight_list)
+
         upload_dict_list_to_gcs(
             self.bucket,
             json.dumps(flight_dict_list),
-            f"bronze/{self.destination_blob_name}/{self.raw_filename}",
+            f"bronze/{self.directory}/{self.flight_raw_filename}",
         )
         logging.info(
             "Uploaded %d flights to GCS bucket: %s.",
@@ -82,7 +76,7 @@ class FlightRadarPipeline:
     def transform(self) -> None:
         logging.info("Processing data...")
         raw_flight_dict_list = get_json_from_gcs(
-            self.bucket, self.destination_blob_name, self.raw_filename
+            self.bucket, self.directory, self.flight_raw_filename
         )
         normalized_flight_dict_list = normalize_data(raw_flight_dict_list)
         logging.info(
@@ -92,19 +86,15 @@ class FlightRadarPipeline:
             self.spark,
             normalized_flight_dict_list,
             FLIGHTS_SCHEMA,
-            self.current_year,
-            self.current_month,
-            self.current_day,
-            self.current_hour,
             self.current_time,
         )
         return flights_sdf
 
     def load(self, any_sdf: DataFrame) -> None:
         logging.info("Uploading flights data to BigQuery...")
-        writing_uri = f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}"
+        writing_uri = f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.directory}"
         loading_uri = (
-            f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.destination_blob_name}/"
+            f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.directory}/"
             "*.parquet"
         )
         write_sdf_to_gcs(any_sdf, writing_uri, PARTITION_BY_COL_LIST)

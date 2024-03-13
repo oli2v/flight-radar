@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from concurrent.futures import Future
 
 from pyspark.sql import SparkSession
@@ -18,6 +18,14 @@ from FlightRadar24.api import Flight
 def init_spark(name: str) -> SparkSession:
     spark = SparkSession.builder.appName(name).getOrCreate()
     return spark
+
+
+def get_directory(current_time: datetime) -> str:
+    year = current_time.year
+    month = current_time.month
+    day = current_time.day
+    hour = current_time.hour
+    return f"tech_year={year}/tech_month={month}/" f"tech_day={day}/tech_hour={hour}"
 
 
 def normalize_data(
@@ -65,18 +73,15 @@ def create_sdf_from_dict_list(
     spark: SparkSession,
     any_dict_list: List[Optional[Dict[str, Any]]],
     schema: StructType,
-    current_year: int,
-    current_month: int,
-    current_day: int,
-    current_hour: int,
     current_time: datetime,
 ) -> DataFrame:
+    year, month, day, hour = _unpack_datetime(current_time)
     return (
         spark.createDataFrame(any_dict_list, schema=schema)
-        .withColumn("tech_year", F.lit(current_year))
-        .withColumn("tech_month", F.lit(current_month))
-        .withColumn("tech_day", F.lit(current_day))
-        .withColumn("tech_hour", F.lit(current_hour))
+        .withColumn("tech_year", F.lit(year))
+        .withColumn("tech_month", F.lit(month))
+        .withColumn("tech_day", F.lit(day))
+        .withColumn("tech_hour", F.lit(hour))
         .withColumn("created_at_ts", F.lit(current_time))
     )
 
@@ -100,6 +105,12 @@ def upload_dict_list_to_gcs(bucket: Bucket, contents: str, destination_blob_name
     blob.upload_from_string(contents)
 
 
+def get_raw_filename(data_type: str, current_time: datetime) -> str:
+    formatted_time = current_time.strftime("%Y%m%d%H%M%S%f")[:-3]
+    raw_filename = f"{data_type}_{formatted_time}.json"
+    return raw_filename
+
+
 def _normalize_nested_dict(
     nested_dict: Dict[Any, Any], sep: str = "_"
 ) -> Dict[str, Any]:
@@ -116,3 +127,11 @@ def _normalize_nested_dict(
             normalized_dict[key] = value
         queue_list.remove(current_node)
     return normalized_dict
+
+
+def _unpack_datetime(any_datetime: datetime) -> Tuple[int]:
+    year = any_datetime.year
+    month = any_datetime.month
+    day = any_datetime.day
+    hour = any_datetime.hour
+    return year, month, day, hour
