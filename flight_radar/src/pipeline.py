@@ -4,7 +4,6 @@ import logging
 from random import randrange
 from datetime import datetime
 from typing import List, Dict, Optional, Any
-import concurrent.futures
 from requests.exceptions import HTTPError, SSLError
 from tqdm import tqdm
 
@@ -25,7 +24,6 @@ from .constants import (
 )
 from .schema import FLIGHTS_SCHEMA
 from .utils import (
-    merge_flights,
     get_json_from_gcs,
     normalize_data,
     create_sdf_from_dict_list,
@@ -107,14 +105,11 @@ class FlightRadarPipeline:
         )
 
     def _extract_flights(self) -> List[Optional[Flight]]:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            future_list = [
-                executor.submit(fr_api.get_flights, **{"bounds": bounds})
-                for bounds in bounds_list
-            ]
-            concurrent.futures.wait(future_list)
-        flight_list = merge_flights(future_list)
-        logging.info("Extracted %d flights.", len(flight_list))
+        bounds_rdd = spark.sparkContext.parallelize(bounds_list)
+        flights_rdd = bounds_rdd.flatMap(
+            lambda bounds: fr_api.get_flights(bounds=bounds)
+        )
+        flight_list = flights_rdd.collect()
         return flight_list
 
     def _extract_flights_details(

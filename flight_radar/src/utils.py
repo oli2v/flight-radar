@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Tuple
-from concurrent.futures import Future
 
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
@@ -11,8 +10,6 @@ from pyspark.sql import DataFrame
 from google.cloud import bigquery
 from google.cloud.bigquery.client import Client
 from google.cloud.storage.bucket import Bucket
-
-from FlightRadar24.api import Flight
 
 
 def init_spark(name: str) -> SparkSession:
@@ -50,15 +47,6 @@ def split_map(latitude_range: range, longitude_range: range) -> List[str]:
             )
             bounds_list.append(bounds)
     return bounds_list
-
-
-def merge_flights(future_list: List[Optional[List[Future]]]) -> List[Optional[Flight]]:
-    merged_flight_list = []
-    for future in future_list:
-        flight_list = future.result()
-        for flight in flight_list:
-            merged_flight_list.append(flight)
-    return merged_flight_list
 
 
 def get_json_from_gcs(
