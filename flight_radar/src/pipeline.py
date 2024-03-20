@@ -9,26 +9,19 @@ from requests.exceptions import HTTPError, SSLError
 from tqdm import tqdm
 
 from pyspark.sql import DataFrame
-from FlightRadar24 import FlightRadar24API
 from FlightRadar24.errors import CloudflareError
 from FlightRadar24.api import Flight
-from google.cloud import storage, bigquery
 
 
 from .constants import (
-    FLIGHTS_SCHEMA,
-    LATITUDE_RANGE,
-    LONGITUDE_RANGE,
     GCS_BUCKET_NAME,
-    GOOGLE_PROJECT_NAME,
-    BQ_DATASET_NAME,
-    BQ_TABLE_NAME,
+    BQ_FLIGHTS_TABLE_ID,
+    BQ_FLIGHTS_TABLE_NAME,
     PARTITION_BY_COL_LIST,
 )
+from .schema import FLIGHTS_SCHEMA
 from .utils import (
-    init_spark,
     merge_flights,
-    split_map,
     get_json_from_gcs,
     normalize_data,
     create_sdf_from_dict_list,
@@ -38,19 +31,20 @@ from .utils import (
     get_directory,
     get_raw_filename,
 )
+from .config import FlightRadarConfig
 
 
 class FlightRadarPipeline:
     # pylint: disable=too-many-instance-attributes
-    def __init__(self):
-        self.fr_api = FlightRadar24API()
-        self.spark = init_spark("flight-radar-spark")
+    def __init__(self, flight_radar_config: FlightRadarConfig):
         self.current_time = datetime.now()
         self.directory = get_directory(self.current_time)
-        self.bq_client = bigquery.Client()
-        self.table_id = f"{GOOGLE_PROJECT_NAME}.{BQ_DATASET_NAME}.{BQ_TABLE_NAME}"
-        self.bucket = storage.Client().bucket(GCS_BUCKET_NAME)
         self.flight_raw_filename = get_raw_filename("flights", self.current_time)
+        self.fr_api = flight_radar_config.fr_api
+        self.spark = flight_radar_config.spark
+        self.bq_client = flight_radar_config.bq_client
+        self.bucket = flight_radar_config.bucket
+        self.bounds_list = flight_radar_config.bounds_list
 
     def run(self) -> None:
         self.extract()
@@ -98,20 +92,19 @@ class FlightRadarPipeline:
             "*.parquet"
         )
         write_sdf_to_gcs(any_sdf, writing_uri, PARTITION_BY_COL_LIST)
-        load_parquet_to_bq(loading_uri, self.bq_client, self.table_id)
-        destination_table = self.bq_client.get_table(self.table_id)
+        load_parquet_to_bq(loading_uri, self.bq_client, BQ_FLIGHTS_TABLE_ID)
+        destination_table = self.bq_client.get_table(BQ_FLIGHTS_TABLE_ID)
         logging.info(
             "Loaded %d rows into BigQuery table %s.",
             destination_table.num_rows,
-            BQ_TABLE_NAME,
+            BQ_FLIGHTS_TABLE_NAME,
         )
 
     def _extract_flights(self) -> List[Optional[Flight]]:
-        bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_list = [
                 executor.submit(self.fr_api.get_flights, **{"bounds": bounds})
-                for bounds in bounds_list
+                for bounds in self.bounds_list
             ]
             concurrent.futures.wait(future_list)
         flight_list = merge_flights(future_list)

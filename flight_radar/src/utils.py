@@ -25,7 +25,7 @@ def get_directory(current_time: datetime) -> str:
     month = current_time.month
     day = current_time.day
     hour = current_time.hour
-    return f"tech_year={year}/tech_month={month}/" f"tech_day={day}/tech_hour={hour}"
+    return f"tech_year={year}/tech_month={month}/tech_day={day}/tech_hour={hour}"
 
 
 def normalize_data(
