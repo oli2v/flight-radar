@@ -34,23 +34,25 @@ spark = init_spark("flight-radar-spark")
 bq_client = bigquery.Client()
 bucket = storage.Client().bucket(GCS_BUCKET_NAME)
 bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
+bounds_rdd = spark.sparkContext.parallelize(bounds_list)
 
 
 class FlightRadarPipeline:
-    # pylint: disable=too-many-instance-attributes
     def __init__(self):
         self.current_time = datetime.now()
         self.directory = get_directory(self.current_time)
         self.flight_raw_filename = get_raw_filename("flights", self.current_time)
-        self.extractor = FlightRadarExtractor(
-            self.current_time,
+        self.extractor = self.init_extractor()
+
+    def init_extractor(self):
+        extractor = FlightRadarExtractor(
             self.directory,
             self.flight_raw_filename,
             fr_api,
-            spark,
             bucket,
-            bounds_list,
+            bounds_rdd,
         )
+        return extractor
 
     def run(self) -> None:
         self.extractor.extract()

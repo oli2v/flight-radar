@@ -5,23 +5,29 @@ from random import randrange
 from typing import List, Dict, Optional, Any
 from tqdm import tqdm
 from requests.exceptions import HTTPError, SSLError
+from FlightRadar24 import FlightRadar24API
 from FlightRadar24.api import Flight
 from FlightRadar24.errors import CloudflareError
+from google.cloud.storage.bucket import Bucket
+from pyspark.rdd import RDD
 from .utils import upload_dict_list_to_gcs
 from .constants import GCS_BUCKET_NAME
 
 
 class FlightRadarExtractor:
     def __init__(
-        self, current_time, directory, raw_filename, fr_api, spark, bucket, bounds_list
+        self,
+        directory: str,
+        raw_filename: str,
+        fr_api: FlightRadar24API,
+        bucket: Bucket,
+        bounds_rdd: RDD,
     ):
-        self.current_time = current_time
         self.directory = directory
         self.raw_filename = raw_filename
         self.fr_api = fr_api
-        self.spark = spark
         self.bucket = bucket
-        self.bounds_list = bounds_list
+        self.bounds_rdd = bounds_rdd
 
     def extract(self) -> None:
         logging.info("Fetching data from FlightRadar API...")
@@ -40,8 +46,7 @@ class FlightRadarExtractor:
         )
 
     def _extract_flights(self) -> List[Optional[Flight]]:
-        bounds_rdd = self.spark.sparkContext.parallelize(self.bounds_list)
-        flights_rdd = bounds_rdd.flatMap(
+        flights_rdd = self.bounds_rdd.flatMap(
             lambda bounds: self.fr_api.get_flights(bounds=bounds)
         )
         flight_list = flights_rdd.collect()
