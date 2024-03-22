@@ -42,20 +42,18 @@ class FlightRadarPipeline:
         self.current_time = datetime.now()
         self.directory = get_directory(self.current_time)
         self.flight_raw_filename = get_raw_filename("flights", self.current_time)
-        self.extractor = self.init_extractor()
 
     def init_extractor(self):
         extractor = FlightRadarExtractor(
             self.directory,
             self.flight_raw_filename,
-            fr_api,
-            bucket,
             bounds_rdd,
         )
         return extractor
 
     def run(self) -> None:
-        self.extractor.extract()
+        extractor = self.init_extractor()
+        extractor.extract(fr_api, bucket)
         flights_sdf = self.transform()
         self.load(flights_sdf)
 
