@@ -11,7 +11,7 @@ from FlightRadar24.errors import CloudflareError
 from google.cloud.storage.bucket import Bucket
 from pyspark.rdd import RDD
 from .utils import upload_dict_list_to_gcs
-from .constants import GCS_BUCKET_NAME
+from .constants import GCS_BUCKET_NAME, MAX_NB_FLIGHTS
 
 
 class FlightRadarExtractor:
@@ -30,6 +30,7 @@ class FlightRadarExtractor:
         flight_list = self._extract_flights(fr_api)
         flight_dict_list = self._extract_flights_details(flight_list, fr_api)
 
+        print(bucket.name)
         upload_dict_list_to_gcs(
             bucket,
             json.dumps(flight_dict_list),
@@ -53,7 +54,7 @@ class FlightRadarExtractor:
         self, flight_list: List[Flight], fr_api: FlightRadar24API
     ) -> List[Optional[Dict[Any, Any]]]:
         flight_dict_list = []
-        for flight in tqdm(flight_list):
+        for flight in tqdm(flight_list[:MAX_NB_FLIGHTS]):
             try:
                 flight_details = fr_api.get_flight_details(flight)
                 flight_dict_list.append(flight_details)
