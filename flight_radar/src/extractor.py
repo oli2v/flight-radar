@@ -30,7 +30,6 @@ class FlightRadarExtractor:
         flight_list = self._extract_flights(fr_api)
         flight_dict_list = self._extract_flights_details(flight_list, fr_api)
 
-        print(bucket.name)
         upload_dict_list_to_gcs(
             bucket,
             json.dumps(flight_dict_list),

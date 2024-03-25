@@ -29,15 +29,15 @@ from .utils import (
 
 from .extractor import FlightRadarExtractor
 
-fr_api = FlightRadar24API()
-spark = init_spark("flight-radar-spark")
-bq_client = bigquery.Client()
-bucket = storage.Client().bucket(GCS_BUCKET_NAME)
-bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
-bounds_rdd = spark.sparkContext.parallelize(bounds_list)
-
 
 class FlightRadarPipeline:
+    fr_api = FlightRadar24API()
+    spark = init_spark("flight-radar-spark")
+    bq_client = bigquery.Client()
+    bucket = storage.Client().bucket(GCS_BUCKET_NAME)
+    bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
+    bounds_rdd = spark.sparkContext.parallelize(bounds_list)
+
     def __init__(self):
         self.current_time = datetime.now()
         self.directory = get_directory(self.current_time)
@@ -47,27 +47,27 @@ class FlightRadarPipeline:
         extractor = FlightRadarExtractor(
             self.directory,
             self.flight_raw_filename,
-            bounds_rdd,
+            self.bounds_rdd,
         )
         return extractor
 
     def run(self) -> None:
         extractor = self.init_extractor()
-        extractor.extract(fr_api, bucket)
+        extractor.extract(self.fr_api, self.bucket)
         flights_sdf = self.transform()
         self.load(flights_sdf)
 
     def transform(self) -> None:
         logging.info("Processing data...")
         raw_flight_dict_list = get_json_from_gcs(
-            bucket, self.directory, self.flight_raw_filename
+            self.bucket, self.directory, self.flight_raw_filename
         )
         normalized_flight_dict_list = normalize_data(raw_flight_dict_list)
         logging.info(
             "Normalized data about %d flights.", len(normalized_flight_dict_list)
         )
         flights_sdf = create_sdf_from_dict_list(
-            spark,
+            self.spark,
             normalized_flight_dict_list,
             FLIGHTS_SCHEMA,
             self.current_time,
@@ -82,8 +82,8 @@ class FlightRadarPipeline:
             "*.parquet"
         )
         write_sdf_to_gcs(any_sdf, writing_uri, PARTITION_BY_COL_LIST)
-        load_parquet_to_bq(loading_uri, bq_client, BQ_FLIGHTS_TABLE_ID)
-        destination_table = bq_client.get_table(BQ_FLIGHTS_TABLE_ID)
+        load_parquet_to_bq(loading_uri, self.bq_client, BQ_FLIGHTS_TABLE_ID)
+        destination_table = self.bq_client.get_table(BQ_FLIGHTS_TABLE_ID)
         logging.info(
             "Loaded %d rows into BigQuery table %s.",
             destination_table.num_rows,
