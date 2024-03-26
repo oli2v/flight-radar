@@ -7,7 +7,6 @@ from FlightRadar24 import FlightRadar24API
 from google.cloud import storage, bigquery
 
 from .constants import (
-    GOOGLE_PROJECT_NAME,
     GCS_BUCKET_NAME,
     BQ_FLIGHTS_TABLE_ID,
     BQ_FLIGHTS_TABLE_NAME,
@@ -35,7 +34,8 @@ class FlightRadarPipeline:
     fr_api = FlightRadar24API()
     spark = init_spark("flight-radar-spark")
     bq_client = bigquery.Client()
-    bucket = storage.Client().bucket(GCS_BUCKET_NAME, GOOGLE_PROJECT_NAME)
+    storage_client = storage.Client()
+    bucket = storage_client.get_bucket(GCS_BUCKET_NAME)
     bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
     bounds_rdd = spark.sparkContext.parallelize(bounds_list)
 
