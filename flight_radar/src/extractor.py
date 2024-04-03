@@ -1,5 +1,4 @@
 import time
-import json
 import logging
 from random import randrange
 from typing import List, Dict, Optional, Any
@@ -8,41 +7,25 @@ from requests.exceptions import HTTPError, SSLError
 from FlightRadar24 import FlightRadar24API
 from FlightRadar24.api import Flight
 from FlightRadar24.errors import CloudflareError
-from google.cloud.storage.bucket import Bucket
-from pyspark.rdd import RDD
-from .utils import upload_dict_list_to_gcs
-from .constants import GCS_BUCKET_NAME, MAX_NB_FLIGHTS
+from pyspark.sql import SparkSession
+from .utils import split_map
+from .constants import MAX_NB_FLIGHTS, LATITUDE_RANGE, LONGITUDE_RANGE
 
 
 class FlightRadarExtractor:
-    def __init__(
-        self,
-        directory: str,
-        raw_filename: str,
-        bounds_rdd: RDD,
-    ):
-        self.directory = directory
-        self.raw_filename = raw_filename
-        self.bounds_rdd = bounds_rdd
+    bounds_list = split_map(LATITUDE_RANGE, LONGITUDE_RANGE)
 
-    def extract(self, fr_api: FlightRadar24API, bucket: Bucket) -> None:
+    def __init__(self, spark: SparkSession):
+        self.bounds_rdd = spark.sparkContext.parallelize(self.bounds_list)
+
+    def extract(self, fr_api: FlightRadar24API) -> None:
         logging.info("Fetching data from FlightRadar API...")
         flight_list = self._extract_flights(fr_api)
         flight_dict_list = self._extract_flights_details(flight_list, fr_api)
-
-        upload_dict_list_to_gcs(
-            bucket,
-            json.dumps(flight_dict_list),
-            f"bronze/{self.directory}/{self.raw_filename}",
-        )
-        logging.info(
-            "Uploaded %d flights to GCS bucket: %s.",
-            len(flight_dict_list),
-            GCS_BUCKET_NAME,
-        )
+        return flight_dict_list
 
     def _extract_flights(self, fr_api: FlightRadar24API) -> List[Optional[Flight]]:
-        def _extract_flights_from_bounds(bounds):
+        def _extract_flights_from_bounds(bounds: str) -> List[Flight]:
             return fr_api.get_flights(bounds=bounds)
 
         flights_rdd = self.bounds_rdd.flatMap(_extract_flights_from_bounds)

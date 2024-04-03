@@ -12,8 +12,19 @@ from google.cloud.bigquery.client import Client
 from google.cloud.storage.bucket import Bucket
 
 
-def init_spark(name: str) -> SparkSession:
-    spark = SparkSession.builder.appName(name).getOrCreate()
+def init_spark(
+    name: str, spark_config: Optional[Dict[str, str]] = None
+) -> SparkSession:
+    spark = (
+        SparkSession.builder.appName(name)
+        .config("spark.jars", "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar")
+        .config("spark.jars", "gs://hadoop-lib/gcs/gcs-connector-latest-hadoop3.jar")
+        .getOrCreate()
+    )
+    if spark_config:
+        for key, value in spark_config.items():
+            spark.conf.set(key, value)
+
     return spark
 
 
@@ -74,9 +85,7 @@ def create_sdf_from_dict_list(
     )
 
 
-def write_sdf_to_gcs(
-    any_sdf: DataFrame, uri: str, partition_by_col_list: List[str]
-) -> None:
+def write_sdf(any_sdf: DataFrame, uri: str, partition_by_col_list: List[str]) -> None:
     any_sdf.write.mode("append").partitionBy(partition_by_col_list).parquet(uri)
 
 
@@ -88,15 +97,21 @@ def load_parquet_to_bq(uri: str, bq_client: Client, table_id: str) -> None:
     load_job.result()
 
 
-def upload_dict_list_to_gcs(bucket: Bucket, contents: str, destination_blob_name: str):
+def upload_dict_list_to_gcs(
+    bucket: Bucket, contents: str, destination_blob_name: str
+) -> None:
     blob = bucket.blob(destination_blob_name)
     blob.upload_from_string(contents)
 
 
 def get_raw_filename(data_type: str, current_time: datetime) -> str:
-    formatted_time = current_time.strftime("%Y%m%d%H%M%S%f")[:-3]
+    formatted_time = _get_formatted_time(current_time)
     raw_filename = f"{data_type}_{formatted_time}.json"
     return raw_filename
+
+
+def _get_formatted_time(current_time: datetime) -> str:
+    return current_time.strftime("%Y%m%d%H%M%S%f")[:-3]
 
 
 def _normalize_nested_dict(
