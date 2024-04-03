@@ -1,12 +1,10 @@
-from flight_radar.src.pipeline import FlightRadarPipeline
+import os
+from flight_radar.src.pipeline import FlightRadarPipeline, GoogleFlightRadarPipeline
 
 
 def run_pipeline():
-    pipeline = FlightRadarPipeline()
-    print("Fetching data from FlightRadar API...")
-    pipeline.extract_all()
-    print("Flights data fetched. Processing data...")
-    pipeline.process()
-    print("Flights data processed. Analyzing data...")
-    pipeline.analyze()
-    print("Flights data analyzed. Done!")
+    if os.getenv("PROJECT_ID"):
+        pipeline = GoogleFlightRadarPipeline()
+    else:
+        pipeline = FlightRadarPipeline()
+    pipeline.run()

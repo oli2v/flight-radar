@@ -1,128 +1,92 @@
-import json
-import time
-from random import randrange
+import os
+import logging
+from typing import List, Dict, Optional, Any
 from datetime import datetime
-from requests.exceptions import HTTPError, SSLError
-from tqdm import tqdm
 
+from pyspark.sql import DataFrame
 from FlightRadar24 import FlightRadar24API
-from FlightRadar24.errors import CloudflareError
-import pyspark.sql.functions as F
-from pyspark.sql.functions import col
+from google.cloud import bigquery
 
-from .constants import KEY_TO_KEEP_LIST, NUM_FLIGHTS_TO_EXTRACT
-from .utils import init_spark, normalize_nested_dict, make_directories
-from .analyze import analyze_flight_data
+from .common.constants import (
+    GCS_BUCKET_NAME,
+    BQ_FLIGHTS_TABLE_ID,
+    BQ_FLIGHTS_TABLE_NAME,
+    SPARK_CONFIG,
+)
+from .common.schema import FLIGHTS_SCHEMA
+from .common.utils import (
+    normalize_data,
+    create_sdf_from_dict_list,
+    load_parquet_to_bq,
+    get_directory,
+    init_spark,
+)
+from .analyze import analyze
+from .extractor import FlightRadarExtractor
+from .persistor import FlightRadarPersistor, GoogleFlightRadarPersistor
 
 
 class FlightRadarPipeline:
-    # pylint: disable=too-many-instance-attributes
+    fr_api = FlightRadar24API()
+
     def __init__(self):
-        self.fr_api = FlightRadar24API()
-        self.spark = init_spark("flight-radar-spark")
         self.current_time = datetime.now()
-        self.current_year = self.current_time.year
-        self.current_month = self.current_time.month
-        self.current_day = self.current_time.day
-        self.current_hour = self.current_time.hour
-        self.formatted_time = self.current_time.strftime("%Y%m%d%H%M%S%f")[:-3]
-        self.raw_filename = f"flights_{self.formatted_time}.json"
-        self.destination_blob_name = (
-            f"tech_year={self.current_year}/tech_month={self.current_month}/"
-            f"tech_day={self.current_day}/tech_hour={self.current_hour}"
+        self.directory = get_directory(self.current_time)
+        self.persistor = FlightRadarPersistor(self.current_time, self.directory)
+        self.spark = init_spark("flight-radar-spark")
+        self.extractor = FlightRadarExtractor(self.spark)
+
+    def run(self) -> None:
+        extractor = self.extractor
+        persistor = self.persistor
+        raw_flight_dict_list = extractor.extract(self.fr_api)
+        persistor.persist_raw_data(raw_flight_dict_list)
+        flights_sdf = self.transform(raw_flight_dict_list)
+        persistor.persist_processed_data(flights_sdf)
+        self.load(flights_sdf)
+
+    def transform(self, raw_flight_dict_list: List[Optional[Dict[Any, Any]]]) -> None:
+        logging.info("Processing data...")
+        normalized_flight_dict_list = normalize_data(raw_flight_dict_list)
+        logging.info(
+            "Normalized data about %d flights.", len(normalized_flight_dict_list)
         )
-        make_directories(self.destination_blob_name)
-
-    def extract_all(self):
-        flight_list = self._extract_flights()
-        flight_dict_list = self._extract_flights_details(flight_list)
-
-        with open(
-            f"flight_radar/src/data/bronze/{self.destination_blob_name}/{self.raw_filename}",
-            "w",
-        ) as json_fp:
-            json.dump(flight_dict_list, json_fp)
-
-    def process(self):
-        with open(
-            f"flight_radar/src/data/bronze/{self.destination_blob_name}/{self.raw_filename}",
-            "r",
-        ) as json_fp:
-            raw_flight_dict_list = json.load(json_fp)
-
-        normalized_flight_dict_list = []
-        for raw_flight_dict in raw_flight_dict_list:
-            normalized_flight_dict = normalize_nested_dict(raw_flight_dict)
-            normalized_flight_dict_list.append(normalized_flight_dict)
-
-        normalized_flight_dict_list = [
-            {
-                key: value
-                for key, value in normalized_flight_dict.items()
-                if key in KEY_TO_KEEP_LIST
-            }
-            for normalized_flight_dict in normalized_flight_dict_list
-        ]
-
-        flights_sdf = (
-            self.spark.createDataFrame(normalized_flight_dict_list)
-            .withColumn("tech_year", F.lit(self.current_year))
-            .withColumn("tech_month", F.lit(self.current_month))
-            .withColumn("tech_day", F.lit(self.current_day))
-            .withColumn("tech_hour", F.lit(self.current_hour))
-            .withColumn("created_at_ts", F.lit(self.current_time))
-            .repartition("tech_year", "tech_month", "tech_day", "tech_hour")
+        flights_sdf = create_sdf_from_dict_list(
+            self.spark,
+            normalized_flight_dict_list,
+            FLIGHTS_SCHEMA,
+            self.current_time,
         )
+        return flights_sdf
 
-        flights_sdf.write.mode("append").partitionBy(
-            "tech_year", "tech_month", "tech_day", "tech_hour"
-        ).parquet("flight_radar/src/data/silver/flights.parquet")
-
-    def analyze(self):
-        flights_sdf = self.spark.read.parquet(
-            "flight_radar/src/data/silver/flights.parquet"
-        ).filter(col("created_at_ts") == self.current_time)
-        (
-            live_flights_count_by_airline_pdf,
-            live_flights_by_distance_pdf,
-            flights_count_by_manufacturer_pdf,
-            model_count_by_airline_pdf,
-        ) = analyze_flight_data(flights_sdf)
-        filename_pdf_dict = {
-            "live_flights_count_by_airline": live_flights_count_by_airline_pdf,
-            "live_flights_by_distance": live_flights_by_distance_pdf,
-            "flights_count_by_manufacturer": flights_count_by_manufacturer_pdf,
-            "model_count_by_airline": model_count_by_airline_pdf,
-        }
+    def load(self, any_sdf: DataFrame) -> None:
+        filename_pdf_dict = analyze(any_sdf, self.current_time)
+        if not os.path.exists(f"flight_radar/src/data/gold/{self.directory}"):
+            os.makedirs(f"flight_radar/src/data/gold/{self.directory}")
         for filename, any_pdf in filename_pdf_dict.items():
             any_pdf.to_csv(
-                (
-                    f"flight_radar/src/data/gold/{self.destination_blob_name}/"
-                    f"{filename}_{self.formatted_time}.csv"
-                ),
+                f"flight_radar/src/data/gold/{self.directory}/{filename}.csv",
                 index=False,
             )
 
-    def _extract_flights(self):
-        flight_list = self._extract_any_object(self.fr_api.get_flights)
-        return flight_list
 
-    def _extract_airports(self):
-        airport_list = self._extract_any_object(self.fr_api.get_airports)
-        return airport_list
+class GoogleFlightRadarPipeline(FlightRadarPipeline):
+    bq_client = bigquery.Client()
 
-    def _extract_flights_details(self, flight_list):
-        flight_dict_list = []
-        for flight in tqdm(flight_list[:NUM_FLIGHTS_TO_EXTRACT]):
-            try:
-                flight_details = self.fr_api.get_flight_details(flight)
-                flight_dict_list.append(flight_details)
-            except HTTPError:
-                pass
-            except (CloudflareError, SSLError):
-                time.sleep(randrange(0, 1))
-        return flight_dict_list
+    def __init__(self):
+        super().__init__()
+        self.persistor = GoogleFlightRadarPersistor(self.current_time, self.directory)
+        self.spark = init_spark("flight-radar-spark-gcp", SPARK_CONFIG)
 
-    def _extract_any_object(self, any_function):
-        obj_list = any_function()
-        return obj_list
+    def load(self, any_sdf: DataFrame) -> None:
+        logging.info("Uploading flights data to BigQuery...")
+        loading_uri = (
+            f"gs://{GCS_BUCKET_NAME}/silver/flights.parquet/{self.directory}/*.parquet"
+        )
+        load_parquet_to_bq(loading_uri, self.bq_client, BQ_FLIGHTS_TABLE_ID)
+        destination_table = self.bq_client.get_table(BQ_FLIGHTS_TABLE_ID)
+        logging.info(
+            "Loaded %d rows into BigQuery table %s.",
+            destination_table.num_rows,
+            BQ_FLIGHTS_TABLE_NAME,
+        )
