@@ -8,8 +8,8 @@ from FlightRadar24 import FlightRadar24API
 from FlightRadar24.api import Flight
 from FlightRadar24.errors import CloudflareError
 from pyspark.sql import SparkSession
-from .utils import split_map
-from .constants import MAX_NB_FLIGHTS, LATITUDE_RANGE, LONGITUDE_RANGE
+from .common.utils import split_map
+from .common.constants import MAX_NB_FLIGHTS, LATITUDE_RANGE, LONGITUDE_RANGE
 
 
 class FlightRadarExtractor:

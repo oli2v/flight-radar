@@ -7,14 +7,14 @@ from pyspark.sql import DataFrame
 from FlightRadar24 import FlightRadar24API
 from google.cloud import bigquery
 
-from .constants import (
+from .common.constants import (
     GCS_BUCKET_NAME,
     BQ_FLIGHTS_TABLE_ID,
     BQ_FLIGHTS_TABLE_NAME,
     SPARK_CONFIG,
 )
-from .schema import FLIGHTS_SCHEMA
-from .utils import (
+from .common.schema import FLIGHTS_SCHEMA
+from .common.utils import (
     normalize_data,
     create_sdf_from_dict_list,
     load_parquet_to_bq,
