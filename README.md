@@ -61,8 +61,8 @@ Prior to being loaded into BigQuery, raw data also go through normalization. The
 Main transformations are done directly in BigQuery using dbt models after the data is loaded.
 
 ## Usage
-1. Install the package
-```pip3 install git+https://github.com/oli2v/flight-radar.git```
+1. Install requirements
+`pip3 install -r requirements.txt`
 
 2. (Optional) If you want to run the GCP implementation, you first need to define environment variables in a .env file then run `source .env`, otherwise you can skip to step 3.
 
