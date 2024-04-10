@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="flight-radar",
-    version="1.2.3",
+    version="1.2.4",
     description="This module implements an ELT Pipeline from FlightRadar API in a GCP environment.",
     author="Olivier Valenduc",
     author_email="o.valenduc@gmail.com",
