@@ -11,7 +11,6 @@ from .common.constants import (
     GCS_BUCKET_NAME,
     BQ_FLIGHTS_TABLE_ID,
     BQ_FLIGHTS_TABLE_NAME,
-    SPARK_CONFIG,
 )
 from .common.schema import FLIGHTS_SCHEMA
 from .common.utils import (
@@ -73,10 +72,10 @@ class FlightRadarPipeline:
 class GoogleFlightRadarPipeline(FlightRadarPipeline):
     bq_client = bigquery.Client()
 
-    def __init__(self):
+    def __init__(self, spark_config: Optional[Dict[str, str]] = None):
         super().__init__()
         self.persistor = GoogleFlightRadarPersistor(self.current_time, self.directory)
-        self.spark = init_spark("flight-radar-spark-gcp", SPARK_CONFIG)
+        self.spark = init_spark("flight-radar-spark-gcp", spark_config)
 
     def load(self, any_sdf: DataFrame) -> None:
         logging.info("Uploading flights data to BigQuery...")
